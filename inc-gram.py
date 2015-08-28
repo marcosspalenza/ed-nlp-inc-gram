@@ -43,6 +43,59 @@ if sys.stdout.encoding == None:
 	#sys.exit()
 
 
+class SequentialSelection():
+	def __init__(self,tagger, tokenizer):
+		self.tagger = tagger
+		self.tokenizer = tokenizer
+		self.db = "/home/markinhos/datasets/atribuna/"
+
+	def select_grammar(self, ranking):
+		ind = 0
+		result = []
+		while resp == 'S'or resp == 's':
+			if ind < len(ranking):
+				print("Analise as gramaticas a seguir:")
+				tkn = self.tokenizer.findall(ranking[ind][2])
+				idxs = ranking[ind][3]
+				tag_phrase = [self.tagger.tag([w])[0][1] for w in tkn]
+				print("[Pos = "+str(ranking[ind][0])+"]\n"+str(tkn[:idxs[0]])+('\033[1m'+str(tkn[idxs[0]:idxs[1]]))+('\033[0m'+str(tkn[idxs[1]:])))
+				print(ranking[ind][1]," => ",str(tag_phrase[:idxs[0]])+('\033[1m'+str(tag_phrase[idxs[0]:idxs[1]]))+('\033[0m'+str(tag_phrase[idxs[1]:])))
+				resp = input("Elas sao compativeis? Sim ou Nao { S | N } : ")
+				if resp == 'S'or resp == 's':
+					for x,y in enumerate(ranking):
+						if x >= ind:
+							result.append(y)
+					for x,y in enumerate(ranking):
+						if x < ind:
+							result.append(y)
+				else:
+					ind += 1
+			else:
+				print("Fim da lista. Indice resetado")
+				ind = 0
+		return result
+	
+	def search_db_samples(grams):
+		dbdata = []
+		files, allowedDocs = getDocs(self.db)
+		corpus = " ".join(files)
+		for pos, phrase in enumerate(corpus.split(".")):
+			tag_phrase = [tagger2.tag([w])[0][1] for w in tokenizer.findall(phrase)]
+			for i, gcan in enumerate(grams):
+				idxs = contains(gcan,tag_phrase)
+				if idxs != None:
+					del(grams[i])
+					dbdata.append([pos,list(gcan), phrase, idxs])
+		return dbdata
+
+	def contains(small, big):
+	    for i in range(len(big)-len(small)+1):
+	        for j in range(len(small)):
+	            if big[i+j] != small[j]:
+	                break
+	        else:
+	            return i, i+len(small)
+	    return None
 
 class ElapsedFormatter():
 	
@@ -179,10 +232,23 @@ for input_id, s in enumerate(sentences):
 	
 	top_idx = np.argmax(gram_rank)
 	top_gram = candidates_simple[top_idx]
-	#print(top_gram)
+
+	files, allowedDocs = getDocs("/home/markinhos/datasets/atribuna/")
+	corpus = " ".join(files)
 	
+	cpcand = []
+	sorted_grams_idx = np.argsort(-gram_rank, axis=0)
+	for i, gram_idx in enumerate(sorted_grams_idx):
+		cpcand.append(list(candidates_simple[gram_idx][0]))
+	
+	print([(x) for x in cpcand])
+
+	selection_strategy = SequentialSelection(tagger2,tokenizer)
+	samples = selection_strategy.search_db_samples(cpcand)
+	gram_rank = selection_strategy.select_grammar(samples)
+
 	log.info("%s: Writing results..." % (inputs[input_id]))
-	with open("gram-%d.txt" % (input_id), 'w') as f:
+	'''with open("gram-%d.txt" % (input_id), 'w') as f:
 		f.write("%s\n" % (inputs[input_id]))
 		f.write("Meta: %s\n" % (" ".join(tagged_sent)))
 		sorted_grams_idx = np.argsort(-gram_rank, axis=0)
@@ -191,5 +257,12 @@ for input_id, s in enumerate(sentences):
 			gram = candidates_simple[gram_idx][0]
 			#print(gram_idx, gram)
 			f.write("%d: %s - %.03f\n" % (i, " ".join(gram), gram_rank[gram_idx]))
-log.info("Finished")
-	
+	'''
+	with open("gram-%d.txt" % (input_id), 'w') as f:
+		f.write("%s\n" % (inputs[input_id]))
+		f.write("Meta: %s\n" % (" ".join(tagged_sent)))
+		for i, gram in enumerate(gram_rank):
+			tkn = tokenizer.findall(gram[2])
+			f.write(str(i)+": [pos "+str(gram[0])+"] "+str(gram[1])+" =>  - "+str(tkn[(gram[3])[0]:(gram[3])[1]])+"\n")
+
+log.info("Finished")	
