@@ -19,15 +19,11 @@ from scipy import sparse as sp
 from sklearn.datasets import load_files
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.metrics.pairwise import euclidean_distances
 
-from pydela.lexicon import Lexicon	
+from lexicon import Lexicon
 
 import nltk
-from nltk.cluster import KMeansClusterer
 from nltk.corpus import mac_morpho
-
-from sklearn.cluster import KMeans
 
 parser = OptionParser(usage="%prog [options] <datasetdir>")
 parser.add_option("-e", "--encoding", dest="encoding", default="latin_1", help="Dataset encoding")
@@ -45,58 +41,6 @@ if sys.stdout.encoding == None:
 #if len(args) == 0:
 	#parser.print_help()
 	#sys.exit()
-
-class ClusteringSelectStrategy:
-	
-	def select_grammar(self, vectors, candidates_simple, sorted_grams_idx, gram_rank):
-		#clusterer = KMeansClusterer(2, nltk.cluster.util.euclidean_distance)#, initial_means=means) 
-		#clusters = clusterer.cluster(vectors.todense(), True, trace=True) 
-		#print('Clusters:', clusters )
-		#print('Means:', clusterer.means())
-		log.info("Clustering...")
-		n_clusters = 2
-		kmeans = KMeans(n_clusters=n_clusters, n_jobs=-1)
-		kmeans.fit(vectors)
-		order_centroids = kmeans.cluster_centers_.argsort()[:, ::-1]
-		print(order_centroids)
-		for i in range(2):
-			print("Cluster %d:" % i, end='')
-			for ind in order_centroids[i, :2]:
-				print(candidates_simple[ind])
-				
-		log.info("Getting centers...")
-		for label in range(n_clusters):
-			label_idxs = np.where(kmeans.labels_ == label)
-			c_idx = euclidean_distances(vectors[label_idxs], kmeans.cluster_centers_[i]).argmin(axis=0)[0]
-			print(np.array(candidates_simple)[label_idxs])
-			nearest = vectors[label_idxs][c_idx]
-			print("Nearest %d: " % (label), nearest.todense(), np.array(candidates_simple)[label_idxs][c_idx])
-		
-class ClusteringSelectStrategy2:
-	
-	def select_grammar(self, vectors, candidates_simple, sorted_grams_idx, gram_rank):
-		#clusterer = KMeansClusterer(2, nltk.cluster.util.euclidean_distance)#, initial_means=means) 
-		#clusters = clusterer.cluster(vectors.todense(), True, trace=True) 
-		#print('Clusters:', clusters )
-		#print('Means:', clusterer.means())
-		log.info("Clustering...")
-		n_clusters = 2
-		kmeans = KMeans(n_clusters=n_clusters, n_jobs=-1)
-		kmeans.fit(gram_rank)
-		order_centroids = kmeans.cluster_centers_.argsort()[:, ::-1]
-		print(order_centroids)
-		for i in range(2):
-			print("Cluster %d:" % i, end='')
-			for ind in order_centroids[i, :2]:
-				print(candidates_simple[ind])
-				
-		log.info("Getting centers...")
-		for label in range(n_clusters):
-			label_idxs = np.where(kmeans.labels_ == label)
-			c_idx = euclidean_distances(vectors[label_idxs], kmeans.cluster_centers_[i]).argmin(axis=0)[0]
-			print(c_idx)
-			nearest = vectors[label_idxs][c_idx]
-			print("Nearest %d: " % (label), nearest.todense(), np.array(candidates_simple)[label_idxs][c_idx])
 
 
 
@@ -126,7 +70,7 @@ with open("input.txt") as f:
 
 #dataset_folder = args[0]
 
-lexicon = Lexicon("/home/ulysses/Apps/Unitex3.1beta/Portuguese (Brazil)/Dela/")
+lexicon = Lexicon("Portuguese (Brazil)/Dela/")
 
 def get_candidates(sentences):
 	candidates_simple = set()
@@ -203,7 +147,7 @@ for input_id, s in enumerate(sentences):
 	candidates_simple = np.array(list(candidates_simple))
 	tagged_sent = np.array(tagged_sent)
 	gram_acc = candidates_simple == tagged_sent
-	#print(gram_acc, candidates_simple, tagged_sent)
+	#print(gram_acc)
 	gram_acc = gram_acc.astype(np.float64).sum(axis=1) / gram_acc.shape[1]
 	#print(gram_acc)
 	
@@ -230,22 +174,18 @@ for input_id, s in enumerate(sentences):
 		log.info("Using accuracy ranking...")
 		gram_rank = gram_acc
 	else:
-		log.warning("Unknown ranking method %s ignored, using cosine_similarity" % (options.ranking_method))
+		log.warning("Unknown ranking method %s ignored, using cosine_similarity")
 		gram_rank = gram_sim
 	
 	top_idx = np.argmax(gram_rank)
 	top_gram = candidates_simple[top_idx]
 	#print(top_gram)
-	sorted_grams_idx = np.argsort(-gram_rank, axis=0)
-	
-	selection_strategy = ClusteringSelectStrategy()
-	selection_strategy.select_grammar(X_vect, candidates_simple, sorted_grams_idx, gram_rank)
 	
 	log.info("%s: Writing results..." % (inputs[input_id]))
 	with open("gram-%d.txt" % (input_id), 'w') as f:
 		f.write("%s\n" % (inputs[input_id]))
 		f.write("Meta: %s\n" % (" ".join(tagged_sent)))
-		
+		sorted_grams_idx = np.argsort(-gram_rank, axis=0)
 		#print("sorted_grams_idx",sorted_grams_idx)
 		for i, gram_idx in enumerate(sorted_grams_idx):
 			gram = candidates_simple[gram_idx][0]
