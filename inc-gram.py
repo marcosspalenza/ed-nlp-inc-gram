@@ -7,6 +7,8 @@ import resource
 import re
 import logging
 import time
+import os
+import codecs
 import itertools
 from datetime import timedelta
 
@@ -44,15 +46,17 @@ if sys.stdout.encoding == None:
 
 
 class SequentialSelection():
+
 	def __init__(self,tagger, tokenizer):
 		self.tagger = tagger
 		self.tokenizer = tokenizer
-		self.db = "/home/markinhos/datasets/atribuna/"
+		self.corpus, self.allowedDocs = self.getDocs("/home/markinhos/datasets/atribuna/")
 
 	def select_grammar(self, ranking):
 		ind = 0
+		resp = 'N'
 		result = []
-		while resp == 'S'or resp == 's':
+		while resp != 'S' and resp != 's':
 			if ind < len(ranking):
 				print("Analise as gramaticas a seguir:")
 				tkn = self.tokenizer.findall(ranking[ind][2])
@@ -75,20 +79,33 @@ class SequentialSelection():
 				ind = 0
 		return result
 	
-	def search_db_samples(grams):
+	def search_db_samples(self, grams):
 		dbdata = []
-		files, allowedDocs = getDocs(self.db)
-		corpus = " ".join(files)
-		for pos, phrase in enumerate(corpus.split(".")):
+		for pos, phrase in enumerate(self.corpus.split(".")):
 			tag_phrase = [tagger2.tag([w])[0][1] for w in tokenizer.findall(phrase)]
 			for i, gcan in enumerate(grams):
-				idxs = contains(gcan,tag_phrase)
+				idxs = self.contains(gcan,tag_phrase)
 				if idxs != None:
 					del(grams[i])
 					dbdata.append([pos,list(gcan), phrase, idxs])
 		return dbdata
 
-	def contains(small, big):
+	def readDocument(self, source):
+		with codecs.open(source, "r", encoding='iso-8859-1') as document:
+			return document.read()
+
+	def getDocs(self, resources):
+	    docs = os.listdir(resources)
+	    allowedDocs = []
+	    corpus = []
+	    for doc in docs:
+	        if not doc[-1] == '~':
+	            allowedDocs.append(doc)
+	            document = self.readDocument("{0}/{1}".format(resources, doc))
+	        corpus.append(document)
+	    return " ".join(corpus), allowedDocs
+
+	def contains(self, small, big):
 	    for i in range(len(big)-len(small)+1):
 	        for j in range(len(small)):
 	            if big[i+j] != small[j]:
@@ -233,9 +250,6 @@ for input_id, s in enumerate(sentences):
 	top_idx = np.argmax(gram_rank)
 	top_gram = candidates_simple[top_idx]
 
-	files, allowedDocs = getDocs("/home/markinhos/datasets/atribuna/")
-	corpus = " ".join(files)
-	
 	cpcand = []
 	sorted_grams_idx = np.argsort(-gram_rank, axis=0)
 	for i, gram_idx in enumerate(sorted_grams_idx):
@@ -265,4 +279,4 @@ for input_id, s in enumerate(sentences):
 			tkn = tokenizer.findall(gram[2])
 			f.write(str(i)+": [pos "+str(gram[0])+"] "+str(gram[1])+" =>  - "+str(tkn[(gram[3])[0]:(gram[3])[1]])+"\n")
 
-log.info("Finished")	
+log.info("Finished")
